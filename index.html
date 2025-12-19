@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI สรุปบทความ - ตัวอย่าง</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        textarea { width: 100%; height: 200px; padding: 10px; margin-bottom: 15px; box-sizing: border-box; }
+        input[type="file"] { margin-bottom: 15px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        /* ปรับสไตล์เพื่อแสดงผลลัพธ์ที่จัดรูปแบบแล้ว */
+        #summary-result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border: 1px solid #28a745; 
+            background-color: #e2f0e6; 
+            border-radius: 4px; 
+            white-space: pre-wrap; /* เพื่อให้เว้นบรรทัดตามที่ AI จัดรูปแบบมา */
+        }
+        /* เพิ่มสไตล์สำหรับหัวข้อที่แปลงมาจาก Markdown (##) */
+        #summary-result h3 {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #0056b3;
+        }
+        .tab-content { border: 1px solid #ddd; padding: 20px; border-top: none; }
+        .tab-button { background-color: #f1f1f1; float: left; border: none; outline: none; cursor: pointer; padding: 10px 15px; transition: 0.3s; }
+        .tab-button:hover { background-color: #ddd; }
+        .tab-button.active { background-color: #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📝 AI สรุปบทความ</h1>
+    
+    <div>
+        <button class="tab-button active" onclick="openTab(event, 'paste')">คัดลอก/วางข้อความ</button>
+        <button class="tab-button" onclick="openTab(event, 'upload')">อัปโหลดไฟล์บทความ</button>
+    </div>
+    <div style="clear: both;"></div>
+
+    <div id="paste" class="tab-content" style="display: block;">
+        <h2>คัดลอกและวางข้อความที่นี่</h2>
+        <textarea id="article-text" placeholder="วางบทความที่คุณต้องการสรุป..."></textarea>
+    </div>
+
+    <div id="upload" class="tab-content" style="display: none;">
+        <h2>อัปโหลดไฟล์บทความ</h2>
+        <input type="file" id="article-file" accept=".txt, .pdf, .docx">
+        <p style="color: gray;">รองรับไฟล์ .txt, .pdf, .docx (การอ่านไฟล์ PDF/DOCX ต้องใช้ไลบรารีเพิ่มเติมในโค้ด JavaScript)</p>
+    </div>
+
+    <button onclick="summarizeArticle()">สรุปบทความด้วย AI</button>
+
+    <hr>
+
+    <h2>✨ ผลลัพธ์การสรุป</h2>
+    <div id="summary-result">
+        <p>ผลการสรุปจะแสดงที่นี่...</p>
+    </div>
+    
+</div>
+
+<script>
+    // **คำแนะนำ:** คุณต้องรัน Backend Server (เช่น Flask) บน http://127.0.0.1:5000/ ก่อน
+    const SUMMARY_API_URL = 'http://127.0.0.1:5000/summarize'; 
+    
+    // ฟังก์ชันจัดการแท็บ (ไม่เปลี่ยนแปลง)
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tab-button");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+
+    // ฟังก์ชันช่วยสำหรับการอ่านไฟล์ .txt (ไม่เปลี่ยนแปลง)
+    function readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.onerror = (error) => reject(error);
+            reader.readAsText(file);
+        });
+    }
+
+    // ฟังก์ชันหลักสำหรับเรียกใช้การสรุป (ปรับปรุงใหม่)
+    async function summarizeArticle() {
+        const resultDiv = document.getElementById('summary-result');
+        resultDiv.innerHTML = "กำลังสรุปบทความ... โปรดรอสักครู่...";
+        
+        let articleContent = "";
+        const pasteTab = document.getElementById('paste');
+        const uploadTab = document.getElementById('upload');
+
+        // 1. ดึงเนื้อหาจากแท็บที่ใช้งานอยู่
+        if (window.getComputedStyle(pasteTab).display === 'block') {
+            articleContent = document.getElementById('article-text').value;
+        } else if (window.getComputedStyle(uploadTab).display === 'block') {
+            const fileInput = document.getElementById('article-file');
+            const file = fileInput.files[0];
+            
+            if (file) {
+                if (file.type === "text/plain") {
+                    articleContent = await readFileAsText(file);
+                } else {
+                    resultDiv.innerHTML = "❌ การอ่านไฟล์ PDF/DOCX จำเป็นต้องใช้ไลบรารีภายนอกและโค้ดที่ซับซ้อน (รองรับเฉพาะไฟล์ .txt)";
+                    return;
+                }
+            }
+        }
+
+        if (!articleContent.trim()) {
+            resultDiv.innerHTML = "โปรดป้อนข้อความหรือเลือกไฟล์";
+            return;
+        }
+        
+        // 2. **การเรียกใช้ AI API ผ่าน Backend Server**
+        try {
+            const response = await fetch(SUMMARY_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    text_to_summarize: articleContent,
+                    // เพิ่มพารามิเตอร์อื่น ๆ ถ้าต้องการควบคุมความยาวการสรุป
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // 3. จัดการการแสดงผลลัพธ์ที่มากขึ้น (สมมติว่า AI ส่งข้อความรวมทั้งหมดมาใน data.summary)
+                const summaryText = data.summary;
+                
+                // ใช้ Regular Expression เพื่อแปลงหัวข้อ Markdown (##) เป็น HTML <h3>
+                // เช่น "## สรุป (Summary)" จะถูกแปลงเป็น "<h3>สรุป (Summary)</h3>"
+                // และทำการแทนที่เพื่อป้องกันการแสดงผลเป็น pre-wrap ที่ติดขอบ
+                let formattedHtml = summaryText
+                    .replace(/##\s*(\S.*)/g, '<h3>$1</h3>') // แปลง ## เป็น <h3>
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // แปลง **Bold** เป็น <strong>
+
+                resultDiv.innerHTML = formattedHtml;
+
+            } else {
+                // จัดการข้อผิดพลาดจาก Server
+                resultDiv.innerHTML = `❌ ข้อผิดพลาดในการสรุป: ${data.error || 'Server Error'}`;
+            }
+
+        } catch (error) {
+            console.error('Error calling summary API:', error);
+            resultDiv.innerHTML = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Server: ${error.message}. โปรดตรวจสอบว่า Backend Server (${SUMMARY_API_URL}) เปิดทำงานอยู่หรือไม่`;
+        }
+    }
+</script>
+
+</body>
+</html>
