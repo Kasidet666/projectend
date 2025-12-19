@@ -8,7 +8,10 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
         .container { max-width: 900px; margin: auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
         h1 { color: #007bff; text-align: center; margin-bottom: 30px; }
-        textarea { width: 100%; padding: 15px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; resize: vertical; font-size: 16px; min-height: 250px; }
+        /* สไตล์สำหรับ input file */
+        #pdfFile { padding: 10px; border: 1px solid #ccc; border-radius: 6px; display: block; width: 100%; box-sizing: border-box; }
+
+        textarea { width: 100%; padding: 15px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; resize: vertical; font-size: 16px; min-height: 200px; }
         button { padding: 12px 25px; background-color: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; transition: background-color 0.3s; }
         button:hover { background-color: #218838; }
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
@@ -26,9 +29,15 @@
 <body>
     <div class="container">
         <h1>✨ AI Article Summarizer ด้วย Gemini API</h1>
+
+        <div style="margin-bottom: 20px; border: 1px dashed #ccc; padding: 15px; border-radius: 8px;">
+            <h3>อัปโหลดไฟล์ PDF:</h3>
+            <input type="file" id="pdfFile" accept=".pdf">
+            <p style="font-size: 14px; color: #666; margin-top: 10px;">* หากมีการอัปโหลดไฟล์ PDF ระบบจะสรุปจากไฟล์โดยอัตโนมัติ</p>
+        </div>
         
-        <p>วางเนื้อหาบทความที่คุณต้องการสรุป (เป็นภาษาใดก็ได้)</p>
-        <textarea id="articleInput" placeholder="กรุณาวางบทความที่นี่..." rows="10"></textarea>
+        <p>หรือวางเนื้อหาบทความที่คุณต้องการสรุป (เป็นภาษาใดก็ได้)</p>
+        <textarea id="articleInput" placeholder="กรุณาวางบทความที่นี่..." rows="8"></textarea>
         
         <button id="summarizeButton" onclick="summarizeArticle()">
             สรุปบทความด้วย AI
@@ -38,16 +47,15 @@
         <div id="errorMessage" class="error-message" style="display: none;"></div>
         
         <div id="resultOutput" class="result-section" style="display: none;">
-            </div>
+        </div>
     </div>
 
     <script>
         // *** สำคัญ: การตั้งค่า URL API ***
-        // หาก Deploy บน Render ให้ใช้ Public URL (เช่น 'https://your-app.onrender.com/summarize')
-        // หากทดสอบใน LAN/Local ให้ใช้ IP Address ของเครื่องที่รัน Server Flask (เช่น 'http://192.168.1.100:5000/summarize')
         const SUMMARY_API_URL = 'http://172.16.30.200:5000/summarize'; 
 
         const articleInput = document.getElementById('articleInput');
+        const pdfFile = document.getElementById('pdfFile'); // เพิ่มการเรียกใช้ input file
         const summarizeButton = document.getElementById('summarizeButton');
         const resultOutput = document.getElementById('resultOutput');
         const errorMessage = document.getElementById('errorMessage');
@@ -68,6 +76,7 @@
         function displayResult(summaryData) {
             resultOutput.style.display = 'block';
             
+            // ... (ฟังก์ชันแสดงผลลัพธ์เหมือนเดิม)
             let html = `
                 <div class="summary">
                     <h3>✅ สรุปเนื้อหา</h3>
@@ -92,8 +101,10 @@
 
         async function summarizeArticle() {
             const articleText = articleInput.value.trim();
-            if (!articleText) {
-                displayError("กรุณาใส่บทความเพื่อทำการสรุป");
+            const file = pdfFile.files[0]; // ดึงไฟล์ที่เลือก
+
+            if (!articleText && !file) {
+                displayError("กรุณาใส่บทความหรือเลือกไฟล์ PDF เพื่อทำการสรุป");
                 return;
             }
 
@@ -101,34 +112,51 @@
             resultOutput.style.display = 'none';
 
             try {
+                // สร้าง FormData สำหรับส่งข้อมูล (ใช้สำหรับทั้งไฟล์และข้อความ)
+                const formData = new FormData();
+                
+                if (file) {
+                    // ส่งไฟล์ PDF
+                    formData.append('pdf_file', file, file.name); // Key ที่ Backend คาดหวังคือ 'pdf_file'
+                } else {
+                    // ส่งข้อความธรรมดา
+                    formData.append('article_text', articleText); // Key ที่ Backend คาดหวังคือ 'article_text'
+                }
+
+                // **สำคัญ: เมื่อส่ง FormData, ไม่ต้องกำหนด 'Content-Type' header**
                 const response = await fetch(SUMMARY_API_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        article_text: articleText // ตรงกับ Key ที่ Backend คาดหวัง
-                    })
+                    body: formData // ส่ง FormData แทน JSON.stringify
                 });
                 
                 // ตรวจสอบสถานะการตอบกลับ
                 if (!response.ok) {
-                    // หากมีข้อผิดพลาด (เช่น 400, 500)
-                    const errorJson = await response.json();
-                    throw new Error(errorJson.error || `Server returned status ${response.status}`);
+                    const errorText = await response.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        throw new Error(errorJson.error || `Server returned status ${response.status}`);
+                    } catch (e) {
+                         // กรณีที่ Backend ส่งข้อความ Error ธรรมดาที่ไม่ใช่ JSON
+                        throw new Error(`Server returned status ${response.status}: ${errorText.substring(0, 100)}...`);
+                    }
                 }
                 
                 const data = await response.json();
                 
-                // Backend จะส่ง JSON มาใน field ชื่อ 'result' ที่เป็น JSON String
-                // เราต้อง Parse JSON นั้นอีกครั้ง
-                const summaryData = JSON.parse(data.result); 
-
+                // Parse JSON String ที่อยู่ภายใน data.result (มาจาก Gemini)
+                let summaryData;
+                try {
+                    summaryData = JSON.parse(data.result);
+                } catch(e) {
+                     // ถ้า Parse ล้มเหลว แสดงว่า Gemini ส่งข้อความที่ไม่ได้อยู่ในรูปแบบ JSON
+                    console.error("JSON Parsing Failed:", data.result);
+                    throw new Error(`รูปแบบผลลัพธ์จาก AI ไม่ถูกต้อง: Backend ส่งข้อมูลที่ไม่ใช่ JSON ที่สมบูรณ์กลับมา`);
+                }
+                 
                 displayResult(summaryData);
 
             } catch (error) {
                 console.error("Fetch Error:", error);
-                // แสดงข้อผิดพลาดที่ชัดเจน
                 if (error.message.includes('Failed to fetch')) {
                     displayError(`เกิดข้อผิดพลาดในการเชื่อมต่อ Server: โปรดตรวจสอบว่า Backend Server (${SUMMARY_API_URL}) เปิดทำงานอยู่หรือไม่`);
                 } else {
